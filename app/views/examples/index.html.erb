@@ -172,6 +172,23 @@
       cursor: pointer;
     }
 
+    /* Z-index management for dual-handle interaction */
+    .slider-min {
+      z-index: 2; /* Left handle on top by default */
+    }
+
+    .slider-max {
+      z-index: 1; /* Right handle below by default */
+    }
+
+    .slider-min:active, .slider-min:focus {
+      z-index: 3; /* Bring to front when being dragged */
+    }
+
+    .slider-max:active, .slider-max:focus {
+      z-index: 3; /* Bring to front when being dragged */
+    }
+
     .slider-min::-webkit-slider-thumb,
     .slider-max::-webkit-slider-thumb {
       -webkit-appearance: none;
