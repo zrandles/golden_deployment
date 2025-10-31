@@ -42,10 +42,10 @@ class ExamplesController < ApplicationController
       # Calculate value at each 5th percentile (0, 5, 10, ..., 95, 100)
       # This gives us 21 reference points for the slider
       percentiles[column] = {}
-      (0..100).step(5).each do |p|
+      (0..100).step(5).each do |percentile|
         # Find the value at this percentile
-        index = ((values.length - 1) * p / 100.0).round
-        percentiles[column][p] = values[index].round(2)
+        index = ((values.length - 1) * percentile / 100.0).round
+        percentiles[column][percentile] = values[index].round(2)
       end
     end
 

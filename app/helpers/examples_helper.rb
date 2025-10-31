@@ -1,3 +1,4 @@
+# Helper methods for formatting and displaying example data
 module ExamplesHelper
   # Status badge with color coding
   # new (blue), in_progress (yellow), completed (green), archived (gray)
@@ -19,10 +20,7 @@ module ExamplesHelper
       'archived' => 'Archived'
     }
 
-    color_class = colors[status] || 'bg-gray-100 text-gray-700'
-    label = labels[status] || status.to_s.titleize
-
-    content_tag(:span, label, class: "px-2 py-1 text-xs rounded #{color_class}")
+    render_badge(status, colors, labels)
   end
 
   # Category badge with color coding
@@ -45,10 +43,7 @@ module ExamplesHelper
       'deployment_pattern' => 'Deploy'
     }
 
-    color_class = colors[category] || 'bg-gray-100 text-gray-700'
-    label = labels[category] || category.to_s.titleize
-
-    content_tag(:span, label, class: "px-2 py-1 text-xs rounded #{color_class}")
+    render_badge(category, colors, labels)
   end
 
   # Format numeric score with highlighting for high values
@@ -57,16 +52,9 @@ module ExamplesHelper
   # Usage:
   #   <%= format_score(example.score) %>
   def format_score(score)
-    return content_tag(:span, '-', class: 'text-gray-400') if score.nil?
+    return empty_value_tag if score.nil?
 
-    color_class = if score >= 90
-                    'text-green-700 font-bold'
-                  elsif score >= 75
-                    'text-yellow-700'
-                  else
-                    'text-gray-600'
-                  end
-
+    color_class = score_color_class(score)
     content_tag(:span, score.round(1), class: color_class)
   end
 
@@ -76,7 +64,7 @@ module ExamplesHelper
   # Usage:
   #   <%= format_priority(example.priority) %>
   def format_priority(priority)
-    return content_tag(:span, '-', class: 'text-gray-400') if priority.nil?
+    return empty_value_tag if priority.nil?
 
     colors = {
       5 => 'text-red-700 font-bold',
@@ -96,24 +84,58 @@ module ExamplesHelper
   # Usage:
   #   <td class="<%= percentile_class(value, 'score', @percentiles) %>">
   def percentile_class(value, column, percentiles)
-    return '' if value.nil? || percentiles.nil? || percentiles[column].nil?
+    return '' if missing_percentile_data?(value, column, percentiles)
 
     # Calculate percentile rank
-    values = percentiles[column]
-    percentile = calculate_percentile(value.to_f, values)
+    column_values = percentiles[column]
+    percentile_rank = calculate_percentile(value.to_f, column_values)
 
-    if percentile >= 95
+    percentile_style_class(percentile_rank)
+  end
+
+  private
+
+  # Shared badge rendering logic
+  def render_badge(value, colors, labels)
+    color_class = colors[value] || 'bg-gray-100 text-gray-700'
+    label = labels[value] || value.to_s.titleize
+
+    content_tag(:span, label, class: "px-2 py-1 text-xs rounded #{color_class}")
+  end
+
+  # Empty value placeholder
+  def empty_value_tag
+    content_tag(:span, '-', class: 'text-gray-400')
+  end
+
+  # Color class for score values
+  def score_color_class(score)
+    if score >= 90
+      'text-green-700 font-bold'
+    elsif score >= 75
+      'text-yellow-700'
+    else
+      'text-gray-600'
+    end
+  end
+
+  # Check if percentile data is available
+  def missing_percentile_data?(value, column, percentiles)
+    value.nil? || percentiles.nil? || percentiles[column].nil?
+  end
+
+  # Style class based on percentile rank
+  def percentile_style_class(percentile_rank)
+    if percentile_rank >= 95
       'bg-green-100 font-bold'
-    elsif percentile >= 90
+    elsif percentile_rank >= 90
       'bg-green-50'
-    elsif percentile >= 75
+    elsif percentile_rank >= 75
       'bg-yellow-50'
     else
       ''
     end
   end
-
-  private
 
   # Calculate percentile rank for a value
   def calculate_percentile(value, percentile_hash)
@@ -121,9 +143,9 @@ module ExamplesHelper
     # Find the highest percentile where value > threshold
     # Example: if value=93, and 90=>92, 95=>96, then value > 92 so percentile rank is 90
     result = 0
-    percentile_hash.sort.reverse.each do |p, v|
-      if value > v
-        result = p
+    percentile_hash.sort.reverse.each do |percentile, threshold_value|
+      if value > threshold_value
+        result = percentile
         break
       end
     end

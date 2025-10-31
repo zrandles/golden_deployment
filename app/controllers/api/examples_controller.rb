@@ -1,3 +1,4 @@
+# API controller for managing examples via JSON endpoints
 module Api
   class ExamplesController < ApplicationController
     # Skip CSRF for API requests (we use Bearer token auth instead)
@@ -19,9 +20,14 @@ module Api
       examples = Example.all
 
       # Apply filters
-      examples = examples.where(status: params[:status]) if params[:status].present?
-      examples = examples.where(category: params[:category]) if params[:category].present?
-      examples = examples.limit(params[:limit].to_i) if params[:limit].present?
+      status_param = params[:status]
+      examples = examples.where(status: status_param) if status_param.present?
+
+      category_param = params[:category]
+      examples = examples.where(category: category_param) if category_param.present?
+
+      limit_param = params[:limit]
+      examples = examples.limit(limit_param.to_i) if limit_param.present?
 
       render json: {
         success: true,
@@ -69,42 +75,66 @@ module Api
       # Use transaction for all-or-nothing operation
       ActiveRecord::Base.transaction do
         examples_data.each_with_index do |example_data, index|
-          begin
-            # Find existing example by name (unique identifier)
-            example = Example.find_by(name: example_data[:name])
-
-            if example
-              # Update existing example
-              if example.update(example_params(example_data))
-                updated_examples << example
-              else
-                errors << { index: index, name: example_data[:name], errors: example.errors.full_messages }
-                raise ActiveRecord::Rollback
-              end
-            else
-              # Create new example
-              example = Example.new(example_params(example_data))
-              if example.save
-                created_examples << example
-              else
-                errors << { index: index, name: example_data[:name], errors: example.errors.full_messages }
-                raise ActiveRecord::Rollback
-              end
-            end
-          rescue => e
-            errors << { index: index, name: example_data[:name], error: e.message }
-            raise ActiveRecord::Rollback
-          end
+          process_example_upsert(example_data, index, created_examples, updated_examples, errors)
         end
       end
 
+      render_bulk_upsert_response(created_examples, updated_examples, errors)
+    end
+
+    private
+
+    # Process a single example upsert (create or update)
+    def process_example_upsert(example_data, index, created_examples, updated_examples, errors)
+      name = example_data[:name]
+      example = Example.find_by(name: name)
+      params_hash = example_params(example_data)
+
+      if example
+        upsert_existing_example(example, params_hash, index, name, updated_examples, errors)
+      else
+        upsert_new_example(params_hash, index, name, created_examples, errors)
+      end
+    rescue StandardError => exception
+      errors << { index: index, name: name, error: exception.message }
+      raise ActiveRecord::Rollback
+    end
+
+    # Update existing example
+    def upsert_existing_example(example, params_hash, index, name, updated_examples, errors)
+      if example.update(params_hash)
+        updated_examples << example
+      else
+        add_validation_error(errors, index, name, example.errors.full_messages)
+        raise ActiveRecord::Rollback
+      end
+    end
+
+    # Create new example
+    def upsert_new_example(params_hash, index, name, created_examples, errors)
+      example = Example.new(params_hash)
+      if example.save
+        created_examples << example
+      else
+        add_validation_error(errors, index, name, example.errors.full_messages)
+        raise ActiveRecord::Rollback
+      end
+    end
+
+    # Add validation error to errors array
+    def add_validation_error(errors, index, name, error_messages)
+      errors << { index: index, name: name, errors: error_messages }
+    end
+
+    # Render JSON response for bulk upsert
+    def render_bulk_upsert_response(created_examples, updated_examples, errors)
       if errors.empty?
         render json: {
           success: true,
           created_count: created_examples.size,
           updated_count: updated_examples.size,
-          created: created_examples.map { |e| { id: e.id, name: e.name } },
-          updated: updated_examples.map { |e| { id: e.id, name: e.name } }
+          created: created_examples.map { |example| { id: example.id, name: example.name } },
+          updated: updated_examples.map { |example| { id: example.id, name: example.name } }
         }, status: :created
       else
         render json: {
@@ -113,8 +143,6 @@ module Api
         }, status: :unprocessable_entity
       end
     end
-
-    private
 
     # Authenticate API requests with Bearer token
     # Token is stored in Rails credentials or ENV variable

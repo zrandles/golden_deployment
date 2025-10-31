@@ -27,6 +27,9 @@ RSpec.describe 'Filter Controller', type: :system, js: true do
   end
 
   before do
+    # Clear localStorage before each test to prevent test pollution
+    visit '/golden_deployment/examples'
+    page.execute_script('localStorage.clear();')
     visit '/golden_deployment/examples'
     # Wait for page to fully load
     expect(page).to have_content('Golden Deployment')

@@ -59,22 +59,9 @@ class Api::MetricsController < ApplicationController
   # Override this method based on your User/Account model
   def user_metrics
     if defined?(User)
-      {
-        total: User.count,
-        active_7d: User.where("last_sign_in_at > ?", 7.days.ago).count,
-        active_30d: User.where("last_sign_in_at > ?", 30.days.ago).count,
-        new_this_week: User.where("created_at > ?", 7.days.ago).count,
-        new_this_month: User.where("created_at > ?", 30.days.ago).count
-      }
+      user_activity_metrics(User, 'last_sign_in_at')
     elsif defined?(Account)
-      # Alternative for apps using Account instead of User
-      {
-        total: Account.count,
-        active_7d: Account.where("updated_at > ?", 7.days.ago).count,
-        active_30d: Account.where("updated_at > ?", 30.days.ago).count,
-        new_this_week: Account.where("created_at > ?", 7.days.ago).count,
-        new_this_month: Account.where("created_at > ?", 30.days.ago).count
-      }
+      user_activity_metrics(Account, 'updated_at')
     else
       nil  # No user tracking
     end
@@ -158,32 +145,21 @@ class Api::MetricsController < ApplicationController
   end
 
   def jobs_healthy?
-    if defined?(SolidQueue)
-      SolidQueue::Job.count >= 0  # Just checking we can query
-      true
-    else
-      nil  # No job system
-    end
-  rescue
-    false
+    check_service_health(SolidQueue::Job)
   end
 
   def storage_connected?
-    if defined?(ActiveStorage)
-      ActiveStorage::Blob.count >= 0  # Just checking we can query
-      true
-    else
-      nil  # No active storage
-    end
-  rescue
-    false
+    check_service_health(ActiveStorage::Blob)
   end
 
   def app_version
-    if File.exist?(Rails.root.join("VERSION"))
-      File.read(Rails.root.join("VERSION")).strip
-    elsif File.exist?(Rails.root.join(".git/refs/heads/main"))
-      File.read(Rails.root.join(".git/refs/heads/main")).strip[0..7]
+    version_file_path = Rails.root.join("VERSION")
+    git_ref_path = Rails.root.join(".git/refs/heads/main")
+
+    if File.exist?(version_file_path)
+      File.read(version_file_path).strip
+    elsif File.exist?(git_ref_path)
+      File.read(git_ref_path).strip[0..7]
     else
       "unknown"
     end
@@ -212,17 +188,50 @@ class Api::MetricsController < ApplicationController
 
   def detect_app_name
     # Try multiple methods to detect the app name
+    root_basename = Rails.root.basename.to_s
+
     # 1. Check Rails root directory name
-    if Rails.root.basename.to_s != "current"
-      return Rails.root.basename.to_s
-    end
+    return root_basename if root_basename != "current"
 
     # 2. For production deployments, check parent directory
-    if Rails.root.to_s.include?("/home/zac/") && Rails.root.basename.to_s == "current"
+    if production_deployment?
       return Rails.root.parent.parent.basename.to_s
     end
 
     # 3. Fall back to module name
     Rails.application.class.module_parent_name.underscore
+  end
+
+  # Helper methods to reduce duplication
+
+  # Build user/account activity metrics
+  def user_activity_metrics(model, activity_column)
+    one_week_ago = 7.days.ago
+    one_month_ago = 30.days.ago
+
+    # Use Arel to safely construct queries with dynamic column names
+    # This prevents SQL injection by using parameterized queries
+    {
+      total: model.count,
+      active_7d: model.where(model.arel_table[activity_column].gt(one_week_ago)).count,
+      active_30d: model.where(model.arel_table[activity_column].gt(one_month_ago)).count,
+      new_this_week: model.where("created_at > ?", one_week_ago).count,
+      new_this_month: model.where("created_at > ?", one_month_ago).count
+    }
+  end
+
+  # Check if service/model can be queried
+  def check_service_health(model_class)
+    return nil unless defined?(model_class)
+
+    model_class.count >= 0  # Just checking we can query
+    true
+  rescue
+    false
+  end
+
+  # Check if this is a production deployment structure
+  def production_deployment?
+    Rails.root.to_s.include?("/home/zac/") && Rails.root.basename.to_s == "current"
   end
 end
