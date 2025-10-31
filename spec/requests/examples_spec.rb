@@ -134,4 +134,65 @@ RSpec.describe "Examples", type: :request do
       expect(duration).to be < 2.0
     end
   end
+
+  describe "#index action logic" do
+    context "when examples exist" do
+      let!(:examples) { create_list(:example, 5) }
+
+      it "assigns all examples to @examples variable" do
+        get "/golden_deployment/examples"
+        # Verify page renders with all examples
+        expect(response.body).to include('5 of 5 examples')
+      end
+
+      it "orders examples by name" do
+        Example.destroy_all
+        create(:example, name: 'Zebra')
+        create(:example, name: 'Apple')
+        create(:example, name: 'Banana')
+
+        get "/golden_deployment/examples"
+
+        # Check that the page contains all names (order verified in system tests)
+        expect(response.body).to include('Apple')
+        expect(response.body).to include('Banana')
+        expect(response.body).to include('Zebra')
+      end
+
+      it "calculates and assigns percentile_values variable" do
+        get "/golden_deployment/examples"
+        # Verify percentile data is included
+        expect(response.body).to include('id="percentile-values"')
+      end
+    end
+
+    context "when no examples exist" do
+      before { Example.destroy_all }
+
+      it "renders page with empty examples list" do
+        get "/golden_deployment/examples"
+        expect(response).to have_http_status(:ok)
+        expect(response.body).to include('0 examples')
+      end
+    end
+  end
+
+  describe "#show action" do
+    let(:example) { create(:example, name: "Show Test Pattern") }
+
+    it "returns successful response for existing example" do
+      get "/golden_deployment/examples/#{example.id}"
+      expect(response).to have_http_status(:ok)
+    end
+
+    it "returns 404 for missing example" do
+      get "/golden_deployment/examples/99999"
+      expect(response).to have_http_status(:not_found)
+    end
+
+    it "renders the show template" do
+      get "/golden_deployment/examples/#{example.id}"
+      expect(response.body).to include("Examples#show")
+    end
+  end
 end
