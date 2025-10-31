@@ -97,8 +97,8 @@ class ExampleService
     end
 
     { success: true, updated_count: updated_count }
-  rescue => e
-    { success: false, error: e.message }
+  rescue StandardError => error
+    { success: false, error: error.message }
   end
 
   # Calculate percentile rank for a given score
@@ -115,7 +115,7 @@ class ExampleService
 
     return 0 if all_scores.empty?
 
-    count_below = all_scores.count { |s| s <= score }
+    count_below = all_scores.count { |value| value <= score }
     ((count_below.to_f / all_scores.length) * 100).round
   end
 

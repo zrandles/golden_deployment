@@ -25,8 +25,10 @@ class ExampleJob < ApplicationJob
   #   ExampleJob.perform_now(example_id)
   def perform(example_id)
     example = Example.find(example_id)
+    logger = Rails.logger
+    example_name = example.name
 
-    Rails.logger.info "Processing example: #{example.name}"
+    logger.info "Processing example: #{example_name}"
 
     # Example operation: Recalculate average metrics
     if example.complexity.present? && example.speed.present? && example.quality.present?
@@ -35,10 +37,10 @@ class ExampleJob < ApplicationJob
       avg = (example.complexity + example.speed + example.quality) / 3.0
 
       # Log the calculation
-      Rails.logger.info "Calculated average metrics: #{avg}"
+      logger.info "Calculated average metrics: #{avg}"
     end
 
-    Rails.logger.info "Finished processing example: #{example.name}"
+    logger.info "Finished processing example: #{example_name}"
   end
 end
 
@@ -57,15 +59,16 @@ class ExampleDailyStatsJob < ApplicationJob
 
   # Runs daily to calculate and log statistics
   def perform
-    Rails.logger.info "=== Daily Example Statistics ==="
+    logger = Rails.logger
+    logger.info "=== Daily Example Statistics ==="
 
     stats = ExampleService.calculate_statistics
 
-    Rails.logger.info "Total examples: #{stats[:total_count]}"
-    Rails.logger.info "Completed: #{stats[:completed_count]}"
-    Rails.logger.info "In progress: #{stats[:in_progress_count]}"
-    Rails.logger.info "Completion rate: #{(stats[:completion_rate] * 100).round(1)}%"
-    Rails.logger.info "Average score: #{stats[:average_score]}"
+    logger.info "Total examples: #{stats[:total_count]}"
+    logger.info "Completed: #{stats[:completed_count]}"
+    logger.info "In progress: #{stats[:in_progress_count]}"
+    logger.info "Completion rate: #{(stats[:completion_rate] * 100).round(1)}%"
+    logger.info "Average score: #{stats[:average_score]}"
 
     # Could also:
     # - Send email digest
@@ -73,7 +76,7 @@ class ExampleDailyStatsJob < ApplicationJob
     # - Generate reports
     # - Archive old data
 
-    Rails.logger.info "=== End Daily Stats ==="
+    logger.info "=== End Daily Stats ==="
   end
 end
 
@@ -87,7 +90,10 @@ class ExampleBulkProcessJob < ApplicationJob
   queue_as :default
 
   def perform(example_ids)
-    Rails.logger.info "Bulk processing #{example_ids.length} examples"
+    logger = Rails.logger
+    example_count = example_ids.length
+
+    logger.info "Bulk processing #{example_count} examples"
 
     # Process in batches of 50
     example_ids.in_groups_of(50, false) do |batch_ids|
@@ -95,7 +101,7 @@ class ExampleBulkProcessJob < ApplicationJob
 
       batch.each do |example|
         # Do something with each example
-        Rails.logger.debug "Processing: #{example.name}"
+        logger.debug "Processing: #{example.name}"
 
         # Example: Update score based on some calculation
         # example.update(score: calculate_new_score(example))
@@ -105,7 +111,7 @@ class ExampleBulkProcessJob < ApplicationJob
       sleep(0.1)
     end
 
-    Rails.logger.info "Finished bulk processing"
+    logger.info "Finished bulk processing"
   end
 end
 
@@ -128,9 +134,9 @@ class ExampleWithErrorHandlingJob < ApplicationJob
     begin
       # Do something that might fail
       process_example(example)
-    rescue SomeCustomError => e
+    rescue SomeCustomError => error
       # Log error but don't fail the job
-      Rails.logger.error "Error processing example #{example_id}: #{e.message}"
+      Rails.logger.error "Error processing example #{example_id}: #{error.message}"
       # Could also: send notification, record error, etc.
     end
   end

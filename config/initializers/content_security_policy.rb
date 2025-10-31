@@ -39,7 +39,7 @@ Rails.application.configure do
 
   # Generate session nonces for permitted inline scripts and styles
   # This allows our own inline code while blocking injected code
-  config.content_security_policy_nonce_generator = ->(request) { request.session.id.to_s }
+  config.content_security_policy_nonce_generator = ->(request) { SecureRandom.base64(16) }
   config.content_security_policy_nonce_directives = %w(script-src)
 
   # For development/testing: Start with report-only mode, then enforce

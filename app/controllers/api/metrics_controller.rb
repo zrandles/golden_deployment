@@ -11,10 +11,12 @@ class Api::MetricsController < ApplicationController
   before_action :verify_metrics_token, if: :token_required?
 
   def show
+    current_time = Time.current.iso8601
+
     render json: {
       app_name: detect_app_name,
       environment: Rails.env,
-      timestamp: Time.current.iso8601,
+      timestamp: current_time,
       version: app_version,
 
       # Business metrics
@@ -28,10 +30,10 @@ class Api::MetricsController < ApplicationController
       # App-specific custom metrics
       custom: custom_metrics
     }
-  rescue => e
+  rescue StandardError => error
     render json: {
       error: "Metrics collection failed",
-      message: e.message,
+      message: error.message,
       timestamp: Time.current.iso8601
     }, status: :internal_server_error
   end
@@ -138,8 +140,9 @@ class Api::MetricsController < ApplicationController
   end
 
   def cache_connected?
-    Rails.cache.write("health_check", "ok", expires_in: 1.second)
-    Rails.cache.read("health_check") == "ok"
+    cache = Rails.cache
+    cache.write("health_check", "ok", expires_in: 1.second)
+    cache.read("health_check") == "ok"
   rescue
     false
   end
@@ -153,8 +156,9 @@ class Api::MetricsController < ApplicationController
   end
 
   def app_version
-    version_file_path = Rails.root.join("VERSION")
-    git_ref_path = Rails.root.join(".git/refs/heads/main")
+    rails_root = Rails.root
+    version_file_path = rails_root.join("VERSION")
+    git_ref_path = rails_root.join(".git/refs/heads/main")
 
     if File.exist?(version_file_path)
       File.read(version_file_path).strip
@@ -188,14 +192,15 @@ class Api::MetricsController < ApplicationController
 
   def detect_app_name
     # Try multiple methods to detect the app name
-    root_basename = Rails.root.basename.to_s
+    rails_root = Rails.root
+    root_basename = rails_root.basename.to_s
 
     # 1. Check Rails root directory name
     return root_basename if root_basename != "current"
 
     # 2. For production deployments, check parent directory
     if production_deployment?
-      return Rails.root.parent.parent.basename.to_s
+      return rails_root.parent.parent.basename.to_s
     end
 
     # 3. Fall back to module name
@@ -232,6 +237,7 @@ class Api::MetricsController < ApplicationController
 
   # Check if this is a production deployment structure
   def production_deployment?
-    Rails.root.to_s.include?("/home/zac/") && Rails.root.basename.to_s == "current"
+    rails_root = Rails.root
+    rails_root.to_s.include?("/home/zac/") && rails_root.basename.to_s == "current"
   end
 end

@@ -12,7 +12,7 @@
 %>
 
 <% content_for :head do %>
-  <style>
+  <style nonce="<%= content_security_policy_nonce %>">
     /* Advanced Table Filter Styles - Adapted from bull_attributes */
 
     /* Modal styles */
@@ -418,7 +418,7 @@
   </div>
 
   <%# === EMBEDDED JSON DATA === %>
-  <script id="examples-data" type="application/json">
+  <script id="examples-data" type="application/json" nonce="<%= content_security_policy_nonce %>">
     <%= raw @examples.map { |e|
       {
         id: e.id,
@@ -435,7 +435,7 @@
     }.to_json %>
   </script>
 
-  <script id="percentile-values" type="application/json">
+  <script id="percentile-values" type="application/json" nonce="<%= content_security_policy_nonce %>">
     <%= raw @percentile_values.to_json %>
   </script>
 
